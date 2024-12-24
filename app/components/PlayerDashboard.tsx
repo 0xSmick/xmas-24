@@ -13,43 +13,28 @@ interface Player {
 
 interface PlayerDashboardProps {
   player: Player;
-  isCurrentTurn: boolean;
   isActive: boolean;
 }
 
-export function PlayerDashboard({
-  player,
-  isCurrentTurn,
-  isActive,
-}: PlayerDashboardProps) {
+export function PlayerDashboard({ player, isActive }: PlayerDashboardProps) {
   const [prevPoints, setPrevPoints] = useState(player.points);
-  const [showAnimation, setShowAnimation] = useState(false);
+  const [animationKey, setAnimationKey] = useState(0);
   const pointDiff = player.points - prevPoints;
 
   useEffect(() => {
     if (player.points !== prevPoints) {
-      setShowAnimation(true);
+      setAnimationKey((prev) => prev + 1);
       setPrevPoints(player.points);
-
-      const timer = setTimeout(() => {
-        setShowAnimation(false);
-      }, 1000);
-
-      return () => clearTimeout(timer);
     }
   }, [player.points, prevPoints]);
 
   return (
     <div
-      className={`
-        p-4 rounded-lg relative
-        ${
-          isActive
-            ? "ring-4 ring-yellow-400 animate-pulse bg-opacity-90"
-            : "bg-opacity-60"
-        }
-        transition-all duration-3000
-      `}
+      className={`p-4 rounded-lg relative ${
+        isActive
+          ? "ring-4 ring-yellow-400 animate-pulse bg-opacity-90"
+          : "bg-opacity-60"
+      }`}
       style={{ backgroundColor: player.color }}
     >
       <div className="flex flex-col items-center">
@@ -61,11 +46,13 @@ export function PlayerDashboard({
         {player.shield > 0 && <div className="mt-1">🛡️ {player.shield}</div>}
 
         <AnimatePresence>
-          {showAnimation && pointDiff !== 0 && (
+          {pointDiff !== 0 && (
             <motion.div
-              initial={{ y: 0, opacity: 0 }}
-              animate={{ y: -40, opacity: 1 }}
+              key={`points-animation-${animationKey}`}
+              initial={{ opacity: 0, y: 0 }}
+              animate={{ opacity: 1, y: -50 }}
               exit={{ opacity: 0 }}
+              transition={{ duration: 0.5 }}
               className="absolute top-0 left-1/2 -translate-x-1/2 text-3xl font-bold"
               style={{
                 color: pointDiff > 0 ? "#4ade80" : "#ef4444",

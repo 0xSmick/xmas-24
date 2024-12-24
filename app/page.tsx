@@ -72,7 +72,7 @@ const generateInitialCards = (): CardType[] => {
       isUsed: false,
     })),
     // Shield cards
-    ...[...Array(3)].map((_, i) => ({
+    ...[...Array(2)].map((_, i) => ({
       id: `power-shield-${i}`,
       type: "power" as const,
       value: 0,
@@ -80,7 +80,7 @@ const generateInitialCards = (): CardType[] => {
       isUsed: false,
     })),
     // Swap cards
-    ...[...Array(3)].map((_, i) => ({
+    ...[...Array(4)].map((_, i) => ({
       id: `power-swap-${i}`,
       type: "power" as const,
       value: 0,
@@ -91,8 +91,8 @@ const generateInitialCards = (): CardType[] => {
 
   // Create generic prize cards
   const genericPrizes: CardType[] = [
-    { id: "prize-high", type: "points", value: 15, isUsed: false },
-    { id: "prize-mid", type: "points", value: 15, isUsed: false },
+    { id: "prize-high", type: "points", value: 25, isUsed: false },
+    { id: "prize-mid", type: "points", value: 1, isUsed: false },
     { id: "prize-low", type: "points", value: 1, isUsed: false },
   ];
 
@@ -107,6 +107,9 @@ const generateInitialCards = (): CardType[] => {
 
   return allCards;
 };
+
+const COLUMNS = ["A", "B", "C", "D", "E"];
+const ROWS = ["1", "2", "3", "4", "5"];
 
 export default function ChristmasGiftGame() {
   const [currentPlayer, setCurrentPlayer] = useState(0);
@@ -162,15 +165,23 @@ export default function ChristmasGiftGame() {
 
       // For point cards, automatically add points and move to next player
       if (card.type === "points") {
+        console.log("Points before update:", players[currentPlayer].points);
+
         setPlayers((prev) => {
           if (!card.isUsed) {
             const newPlayers = [...prev];
             newPlayers[currentPlayer].points += card.value;
             card.isUsed = true;
+            console.log(
+              "Points after update:",
+              newPlayers[currentPlayer].points
+            );
             return newPlayers;
           }
           return prev;
         });
+
+        // Delay moving to next player to allow animation to play
         setCurrentPlayer((prev) => (prev + 1) % players.length);
       } else {
         // For power cards, show the modal
@@ -500,7 +511,7 @@ export default function ChristmasGiftGame() {
             });
 
             // Set shield duration to 2 turns
-            currentPlayerObj.shield = 2;
+            currentPlayerObj.shield = 3;
 
             // Mark card as used within the same update
             if (selectedCard) {
@@ -534,8 +545,9 @@ export default function ChristmasGiftGame() {
   const handleModalClose = useCallback(() => {
     setShowCardModal(false);
     setActionResult(null);
-    // Move to next player when modal closes after showing result
-    if (actionResult) {
+
+    // Move to next player when modal closes, regardless of action taken
+    if (selectedCard?.type === "power") {
       // Only reduce shield count for players who have an active shield
       setPlayers((current) =>
         current.map((player) => ({
@@ -545,25 +557,52 @@ export default function ChristmasGiftGame() {
       );
       setCurrentPlayer((prev) => (prev + 1) % players.length);
     }
-  }, [actionResult, players.length]);
+  }, [selectedCard?.type, players.length]);
 
-  const cardGrid = useMemo(
-    () => (
-      <div className="grid grid-cols-5 gap-4 mb-8">
-        {gameCards.map((card, index) => (
-          <Card
-            key={card.id}
-            isFlipped={flippedCards[index]}
-            onClick={() => handleCardClick(card, index)}
-            type={card.type}
-            value={card.value}
-            powerType={card.powerType}
-            isUsed={flippedCards[index]}
-          />
+  const cardGrid = (
+    <div className="relative">
+      {/* Column labels (A-E) */}
+      <div className="flex mb-2">
+        <div className="w-12"></div>
+        {COLUMNS.map((col) => (
+          <div key={col} className="w-32 text-center text-xl font-bold">
+            {col}
+          </div>
         ))}
       </div>
-    ),
-    [flippedCards, handleCardClick, gameCards]
+
+      {/* Grid with row labels */}
+      <div className="space-y-2">
+        {ROWS.map((row, rowIndex) => (
+          <div key={row} className="flex items-center">
+            <div className="w-12 text-xl font-bold text-center flex items-center justify-center h-24">
+              {row}
+            </div>
+            <div className="flex items-center justify-between flex-1">
+              {gameCards
+                .slice(rowIndex * 5, (rowIndex + 1) * 5)
+                .map((card, colIndex) => {
+                  const index = rowIndex * 5 + colIndex;
+                  return (
+                    <Card
+                      key={index}
+                      isFlipped={flippedCards[index]}
+                      onClick={() => handleCardClick(card, index)}
+                      type={card.type}
+                      value={card.value}
+                      isCurrentPlayer={currentPlayer === 0}
+                      isUsed={card.isUsed}
+                      powerType={
+                        card.type === "power" ? card.powerType : undefined
+                      }
+                    />
+                  );
+                })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 
   const updateShields = useCallback(() => {
@@ -579,21 +618,63 @@ export default function ChristmasGiftGame() {
     <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-800 text-white flex flex-col items-center justify-center p-4">
       <Snowfall />
 
-      <h1 className="text-4xl font-bold mb-8 text-red-500 filter drop-shadow-lg">
-        Christmas Gift Game
-      </h1>
+      <div className="flex gap-8">
+        <div>
+          <h1 className="text-4xl font-bold mb-8 text-red-500 filter drop-shadow-lg text-center">
+            🎄 Holiday Gift Gambit 🎁
+          </h1>
 
-      <div className="flex justify-center space-x-4 mb-8 z-10">
-        {players.map((player, index) => (
-          <PlayerDashboard
-            key={player.id}
-            player={player}
-            isActive={index === currentPlayer}
-          />
-        ))}
+          <div className="flex justify-center space-x-4 mb-8 z-10">
+            {players.map((player, index) => (
+              <PlayerDashboard
+                key={player.id}
+                player={player}
+                isActive={index === currentPlayer}
+              />
+            ))}
+          </div>
+
+          <div className="relative z-10">{cardGrid}</div>
+        </div>
+
+        <div className="w-64 bg-white bg-opacity-10 p-4 rounded-lg self-start mt-24">
+          <h2 className="text-xl font-bold mb-4">Rules</h2>
+
+          {/* Prize Rules */}
+          <div className="mb-6">
+            <h3 className="font-bold mb-2">Prizes</h3>
+            <ul className="list-disc list-inside text-sm space-y-1">
+              <li>Players choose gifts in order of points</li>
+              <li>1st: $300 max</li>
+              <li>2nd: $200 max</li>
+              <li>3rd: $100 max</li>
+            </ul>
+          </div>
+
+          {/* Power Cards */}
+          <div>
+            <h3 className="font-bold mb-2">Power Cards</h3>
+            <ul className="text-sm space-y-2">
+              <li className="flex items-center gap-2">
+                <span className="text-lg">🔄</span>
+                <span>Take 7 or give 3 of your points</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-lg">🎲</span>
+                <span>Double or halve your points</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-lg">🛡️</span>
+                <span>Shield take/swap for 2 turns</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-lg">⇄</span>
+                <span>Swap all your points with another player</span>
+              </li>
+            </ul>
+          </div>
+        </div>
       </div>
-
-      <div className="relative z-10">{cardGrid}</div>
 
       {selectedCard && (
         <CardModal

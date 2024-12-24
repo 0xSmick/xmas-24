@@ -17,7 +17,6 @@ import type {
 } from "@/app/types/game";
 
 // Add new types for power cards
-export type PowerCardType = "takeGive" | "gamble" | "shield" | "swap";
 export type PowerCardState = "reveal" | "action" | "confirmation";
 
 interface CardModalProps {
@@ -35,6 +34,21 @@ interface CardModalProps {
   selectedPlayer?: string;
   setSelectedPlayer: (player: string) => void;
 }
+
+const getPowerTitle = (powerType: PowerCardType): string => {
+  switch (powerType) {
+    case "takeGive":
+      return "Take or Give Points";
+    case "gamble":
+      return "Gamble Your Points";
+    case "shield":
+      return "Activate Shield";
+    case "swap":
+      return "Swap Points";
+    default:
+      return "Power Card";
+  }
+};
 
 export function CardModal({
   isOpen,
@@ -82,6 +96,7 @@ export function CardModal({
               <div className="flex justify-center gap-4">
                 <Button
                   onClick={() => {
+                    if (!onPowerAction) return;
                     const result = onPowerAction({
                       type: "gamble",
                       action: "flip",
@@ -140,6 +155,7 @@ export function CardModal({
                 <div className="flex justify-center gap-4">
                   <Button
                     onClick={() => {
+                      if (!onPowerAction) return;
                       const result = onPowerAction({
                         type: "takeGive",
                         action: "take",
@@ -154,6 +170,7 @@ export function CardModal({
                   </Button>
                   <Button
                     onClick={() => {
+                      if (!onPowerAction) return;
                       const result = onPowerAction({
                         type: "takeGive",
                         action: "give",
@@ -220,6 +237,7 @@ export function CardModal({
                 <div className="flex justify-center gap-4">
                   <Button
                     onClick={() => {
+                      if (!onPowerAction) return;
                       const result = onPowerAction({
                         type: "swap",
                         action: "swap",
@@ -271,6 +289,7 @@ export function CardModal({
               <div className="flex justify-center gap-4">
                 <Button
                   onClick={() => {
+                    if (!onPowerAction) return;
                     const result = onPowerAction({
                       type: "shield",
                       action: "activate",
@@ -309,8 +328,17 @@ export function CardModal({
   };
 
   return (
-    <Dialog open={isOpen} onClose={onClose}>
-      <DialogContent>{renderPowerContent()}</DialogContent>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent>
+        <div className="p-6 bg-green-800 rounded-lg text-white">
+          <h2 className="text-2xl font-bold mb-4 text-center">
+            {cardType === "points"
+              ? `Points Card: +${cardValue}`
+              : getPowerTitle(powerType!)}
+          </h2>
+        </div>
+        {renderPowerContent()}
+      </DialogContent>
     </Dialog>
   );
 }
