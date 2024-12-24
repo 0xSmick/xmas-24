@@ -1,6 +1,7 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface Player {
   id: string;
@@ -18,15 +19,30 @@ interface PlayerDashboardProps {
 
 export function PlayerDashboard({
   player,
+  isCurrentTurn,
   isActive,
-}: {
-  player: Player;
-  isActive: boolean;
-}) {
+}: PlayerDashboardProps) {
+  const [prevPoints, setPrevPoints] = useState(player.points);
+  const [showAnimation, setShowAnimation] = useState(false);
+  const pointDiff = player.points - prevPoints;
+
+  useEffect(() => {
+    if (player.points !== prevPoints) {
+      setShowAnimation(true);
+      setPrevPoints(player.points);
+
+      const timer = setTimeout(() => {
+        setShowAnimation(false);
+      }, 1000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [player.points, prevPoints]);
+
   return (
     <div
       className={`
-        p-4 rounded-lg
+        p-4 rounded-lg relative
         ${
           isActive
             ? "ring-4 ring-yellow-400 animate-pulse bg-opacity-90"
@@ -43,6 +59,23 @@ export function PlayerDashboard({
         </div>
         <div className="text-2xl font-bold">{player.points}</div>
         {player.shield > 0 && <div className="mt-1">🛡️ {player.shield}</div>}
+
+        <AnimatePresence>
+          {showAnimation && pointDiff !== 0 && (
+            <motion.div
+              initial={{ y: 0, opacity: 0 }}
+              animate={{ y: -40, opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute top-0 left-1/2 -translate-x-1/2 text-3xl font-bold"
+              style={{
+                color: pointDiff > 0 ? "#4ade80" : "#ef4444",
+                zIndex: 50,
+              }}
+            >
+              {pointDiff > 0 ? `+${pointDiff}` : pointDiff}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -14,37 +14,98 @@ import type {
 } from "./types/game";
 
 const initialPlayers: Player[] = [
-  { id: "1", name: "Player 1", color: "#FF6B6B", points: 5, shield: 0 },
-  { id: "2", name: "Player 2", color: "#4ECDC4", points: 5, shield: 0 },
-  { id: "3", name: "Player 3", color: "#45B7D1", points: 5, shield: 0 },
-  { id: "4", name: "Player 4", color: "#FFB347", points: 5, shield: 0 },
+  { id: "1", name: "Mom", color: "#FF6B6B", points: 5, shield: 0 },
+  { id: "2", name: "Lyssi", color: "#4ECDC4", points: 5, shield: 0 },
+  { id: "3", name: "Chris", color: "#45B7D1", points: 5, shield: 0 },
+  { id: "4", name: "Dad", color: "#FFB347", points: 5, shield: 0 },
 ];
 
 const generateInitialCards = (): CardType[] => {
-  const powerTypes: PowerCardType[] = ["takeGive", "gamble", "shield", "swap"];
-  return Array(25)
-    .fill(null)
-    .map((_, index) => {
-      const isPointCard = Math.random() > 0.3;
-      if (isPointCard) {
-        return {
-          id: `points-${index}`,
-          type: "points",
-          value: Math.floor(Math.random() * 10) + 1,
-          isUsed: false,
-        };
-      } else {
-        const powerType =
-          powerTypes[Math.floor(Math.random() * powerTypes.length)];
-        return {
-          id: `power-${index}`,
-          type: "power",
-          value: 0,
-          isUsed: false,
-          powerType,
-        };
-      }
-    });
+  // Create point cards
+  const pointCards: CardType[] = [
+    // 10 point cards
+    ...[...Array(2)].map((_, i) => ({
+      id: `points-10-${i}`,
+      type: "points" as const,
+      value: 10,
+      isUsed: false,
+    })),
+    // 7 point cards
+    ...[...Array(2)].map((_, i) => ({
+      id: `points-7-${i}`,
+      type: "points" as const,
+      value: 7,
+      isUsed: false,
+    })),
+    // 5 point cards
+    ...[...Array(3)].map((_, i) => ({
+      id: `points-5-${i}`,
+      type: "points" as const,
+      value: 5,
+      isUsed: false,
+    })),
+    // 3 point cards
+    ...[...Array(3)].map((_, i) => ({
+      id: `points-3-${i}`,
+      type: "points" as const,
+      value: 3,
+      isUsed: false,
+    })),
+  ];
+
+  // Create power cards
+  const powerCards: CardType[] = [
+    // Take/Give cards
+    ...[...Array(3)].map((_, i) => ({
+      id: `power-takeGive-${i}`,
+      type: "power" as const,
+      value: 0,
+      powerType: "takeGive" as const,
+      isUsed: false,
+    })),
+    // Gamble cards
+    ...[...Array(3)].map((_, i) => ({
+      id: `power-gamble-${i}`,
+      type: "power" as const,
+      value: 0,
+      powerType: "gamble" as const,
+      isUsed: false,
+    })),
+    // Shield cards
+    ...[...Array(3)].map((_, i) => ({
+      id: `power-shield-${i}`,
+      type: "power" as const,
+      value: 0,
+      powerType: "shield" as const,
+      isUsed: false,
+    })),
+    // Swap cards
+    ...[...Array(3)].map((_, i) => ({
+      id: `power-swap-${i}`,
+      type: "power" as const,
+      value: 0,
+      powerType: "swap" as const,
+      isUsed: false,
+    })),
+  ];
+
+  // Create generic prize cards
+  const genericPrizes: CardType[] = [
+    { id: "prize-high", type: "points", value: 15, isUsed: false },
+    { id: "prize-mid", type: "points", value: 15, isUsed: false },
+    { id: "prize-low", type: "points", value: 1, isUsed: false },
+  ];
+
+  // Combine all cards and shuffle
+  const allCards = [...pointCards, ...powerCards, ...genericPrizes];
+
+  // Fisher-Yates shuffle
+  for (let i = allCards.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [allCards[i], allCards[j]] = [allCards[j], allCards[i]];
+  }
+
+  return allCards;
 };
 
 export default function ChristmasGiftGame() {
@@ -52,7 +113,33 @@ export default function ChristmasGiftGame() {
   const [flippedCards, setFlippedCards] = useState<boolean[]>(
     Array(25).fill(false)
   );
-  const [gameCards] = useState<CardType[]>(generateInitialCards());
+  const [gameCards] = useState<CardType[]>(() => {
+    const cards = generateInitialCards();
+
+    // Debug logging
+    console.log("=== Card Distribution ===");
+
+    const pointCards = cards.filter((c) => c.type === "points");
+    console.log("Point Cards:", {
+      total: pointCards.length,
+      values: pointCards.map((c) => c.value).sort((a, b) => b - a),
+      distribution: pointCards.reduce((acc, card) => {
+        acc[card.value] = (acc[card.value] || 0) + 1;
+        return acc;
+      }, {} as Record<number, number>),
+    });
+
+    const powerCards = cards.filter((c) => c.type === "power");
+    console.log("Power Cards:", {
+      total: powerCards.length,
+      types: powerCards.reduce((acc, card) => {
+        acc[card.powerType!] = (acc[card.powerType!] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>),
+    });
+
+    return cards;
+  });
   const [showCardModal, setShowCardModal] = useState(false);
   const [selectedCard, setSelectedCard] = useState<CardType | null>(null);
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
@@ -73,10 +160,25 @@ export default function ChristmasGiftGame() {
         return newFlipped;
       });
 
-      setSelectedCard(card);
-      setShowCardModal(true);
+      // For point cards, automatically add points and move to next player
+      if (card.type === "points") {
+        setPlayers((prev) => {
+          if (!card.isUsed) {
+            const newPlayers = [...prev];
+            newPlayers[currentPlayer].points += card.value;
+            card.isUsed = true;
+            return newPlayers;
+          }
+          return prev;
+        });
+        setCurrentPlayer((prev) => (prev + 1) % players.length);
+      } else {
+        // For power cards, show the modal
+        setSelectedCard(card);
+        setShowCardModal(true);
+      }
     },
-    [flippedCards]
+    [flippedCards, currentPlayer, players.length]
   );
 
   const handleConfirm = useCallback(() => {

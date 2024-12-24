@@ -97,3 +97,18 @@ body {
 .animate-snow {
   animation: snow 20s linear infinite;
 }
+
+@keyframes floatUp {
+  0% {
+    transform: translate(-50%, 0);
+    opacity: 0;
+  }
+  50% {
+    transform: translate(-50%, -20px);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -40px);
+    opacity: 0;
+  }
+}
