@@ -243,6 +243,54 @@ export function CardModal({
             </div>
           );
 
+        case "shield":
+          if (actionResult) {
+            return (
+              <div className="space-y-4">
+                <p className="text-center font-bold text-xl">
+                  {actionResult.title}
+                </p>
+                <p className="text-center">{actionResult.message}</p>
+                <DialogFooter>
+                  <Button onClick={onClose}>Close</Button>
+                </DialogFooter>
+              </div>
+            );
+          }
+
+          return (
+            <div className="space-y-4">
+              <DialogHeader>
+                <DialogTitle>Activate Shield</DialogTitle>
+                <DialogDescription>
+                  Protect yourself from take and swap actions for 3 turns.
+                  Current shield: {currentPoints > 0 ? "Active" : "None"}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="flex justify-center gap-4">
+                <Button
+                  onClick={() => {
+                    const result = onPowerAction({
+                      type: "shield",
+                      action: "activate",
+                    });
+                    setActionResult(result);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  Activate Shield
+                </Button>
+                <Button
+                  onClick={onClose}
+                  className="bg-gray-600 hover:bg-gray-700"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          );
+
         // Other power types will go here
         default:
           return null;

@@ -14,10 +14,10 @@ import type {
 } from "./types/game";
 
 const initialPlayers: Player[] = [
-  { id: "1", name: "Player 1", color: "#FF6B6B", points: 5, shield: 1 },
-  { id: "2", name: "Player 2", color: "#4ECDC4", points: 5, shield: 1 },
-  { id: "3", name: "Player 3", color: "#45B7D1", points: 5, shield: 1 },
-  { id: "4", name: "Player 4", color: "#FFB347", points: 5, shield: 1 },
+  { id: "1", name: "Player 1", color: "#FF6B6B", points: 5, shield: 0 },
+  { id: "2", name: "Player 2", color: "#4ECDC4", points: 5, shield: 0 },
+  { id: "3", name: "Player 3", color: "#45B7D1", points: 5, shield: 0 },
+  { id: "4", name: "Player 4", color: "#FFB347", points: 5, shield: 0 },
 ];
 
 const generateInitialCards = (): CardType[] => {
@@ -135,39 +135,36 @@ export default function ChristmasGiftGame() {
           const isWin = chance > 0.5;
           let newPoints = 0;
 
-          console.log("Starting points:", players[currentPlayer].points);
-          console.log("Is win:", isWin);
+          console.log("Starting gamble:", {
+            currentPoints: players[currentPlayer].points,
+            isWin,
+          });
 
           setPlayers((current) => {
-            const newPlayers = [...current];
-            const player = newPlayers[currentPlayer];
-            const startingPoints = player.points;
-
-            // If points have already been modified, return current state
-            if (player.points !== 5) {
-              // Or whatever your initial points value is
-              console.log("Points already modified, skipping update");
+            // Skip if we've already processed this action
+            if (selectedCard?.isUsed) {
+              console.log("Card already used, skipping update");
               return current;
             }
 
-            console.log("State update - starting points:", startingPoints);
+            const newPlayers = [...current];
+            const player = newPlayers[currentPlayer];
 
             if (isWin) {
               player.points *= 2;
-              console.log("State update - after doubling:", player.points);
             } else {
               player.points = Math.floor(player.points / 2);
-              console.log("State update - after halving:", player.points);
             }
 
             newPoints = player.points;
+
+            // Mark card as used within the same update
+            if (selectedCard) {
+              selectedCard.isUsed = true;
+            }
+
             return newPlayers;
           });
-
-          // Mark card as used
-          if (selectedCard) {
-            selectedCard.isUsed = true;
-          }
 
           const result = {
             title: isWin ? "Lucky! 🎉" : "Unlucky! 😢",
@@ -178,7 +175,6 @@ export default function ChristmasGiftGame() {
             isSuccess: isWin,
           };
 
-          setActionResult(result);
           return result;
         }
 
@@ -383,6 +379,45 @@ export default function ChristmasGiftGame() {
           return result;
         }
 
+        case "shield": {
+          console.log("=== Starting Shield Action ===");
+
+          setPlayers((current) => {
+            // Skip if we've already processed this action
+            if (selectedCard?.isUsed) {
+              console.log("Card already used, skipping update");
+              return current;
+            }
+
+            const newPlayers = [...current];
+            const currentPlayerObj = newPlayers[currentPlayer];
+
+            console.log("🛡️ Before shield activation:", {
+              player: currentPlayerObj.name,
+              shield: currentPlayerObj.shield,
+            });
+
+            // Set shield duration to 2 turns
+            currentPlayerObj.shield = 2;
+
+            // Mark card as used within the same update
+            if (selectedCard) {
+              selectedCard.isUsed = true;
+            }
+
+            return newPlayers;
+          });
+
+          const result = {
+            title: "Shield Activated!",
+            message:
+              "You are protected from take and swap actions for 2 turns!",
+            points: players[currentPlayer].points,
+          };
+
+          return result;
+        }
+
         default:
           return {
             title: "Invalid Action",
@@ -399,6 +434,13 @@ export default function ChristmasGiftGame() {
     setActionResult(null);
     // Move to next player when modal closes after showing result
     if (actionResult) {
+      // Only reduce shield count for players who have an active shield
+      setPlayers((current) =>
+        current.map((player) => ({
+          ...player,
+          shield: player.shield > 0 ? player.shield - 1 : 0,
+        }))
+      );
       setCurrentPlayer((prev) => (prev + 1) % players.length);
     }
   }, [actionResult, players.length]);
@@ -461,7 +503,9 @@ export default function ChristmasGiftGame() {
           onConfirm={handleConfirm}
           powerType={selectedCard.powerType}
           players={players
-            .filter((p) => p.id !== players[currentPlayer].id)
+            .filter(
+              (p) => p.name !== players[currentPlayer].name && p.shield === 0
+            )
             .map((p) => p.name)}
           onPowerAction={handlePowerAction}
           actionResult={actionResult}
