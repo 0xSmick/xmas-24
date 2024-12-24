@@ -1,101 +1,475 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState, useCallback, useMemo, useRef } from "react";
+import { Card } from "./components/Card";
+import { PlayerDashboard } from "./components/PlayerDashboard";
+import { CardModal } from "./components/CardModal";
+import { Snowfall } from "./components/Snowfall";
+import type {
+  Player,
+  Card as CardType,
+  PowerCardType,
+  PowerAction,
+  PowerActionResult,
+} from "./types/game";
+
+const initialPlayers: Player[] = [
+  { id: "1", name: "Player 1", color: "#FF6B6B", points: 5, shield: 1 },
+  { id: "2", name: "Player 2", color: "#4ECDC4", points: 5, shield: 1 },
+  { id: "3", name: "Player 3", color: "#45B7D1", points: 5, shield: 1 },
+  { id: "4", name: "Player 4", color: "#FFB347", points: 5, shield: 1 },
+];
+
+const generateInitialCards = (): CardType[] => {
+  const powerTypes: PowerCardType[] = ["takeGive", "gamble", "shield", "swap"];
+  return Array(25)
+    .fill(null)
+    .map((_, index) => {
+      const isPointCard = Math.random() > 0.3;
+      if (isPointCard) {
+        return {
+          id: `points-${index}`,
+          type: "points",
+          value: Math.floor(Math.random() * 10) + 1,
+          isUsed: false,
+        };
+      } else {
+        const powerType =
+          powerTypes[Math.floor(Math.random() * powerTypes.length)];
+        return {
+          id: `power-${index}`,
+          type: "power",
+          value: 0,
+          isUsed: false,
+          powerType,
+        };
+      }
+    });
+};
+
+export default function ChristmasGiftGame() {
+  const [currentPlayer, setCurrentPlayer] = useState(0);
+  const [flippedCards, setFlippedCards] = useState<boolean[]>(
+    Array(25).fill(false)
+  );
+  const [gameCards] = useState<CardType[]>(generateInitialCards());
+  const [showCardModal, setShowCardModal] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<CardType | null>(null);
+  const [players, setPlayers] = useState<Player[]>(initialPlayers);
+  const actionProcessedRef = useRef<string>("");
+  const [actionInProgress, setActionInProgress] = useState(false);
+  const [actionResult, setActionResult] = useState<PowerActionResult | null>(
+    null
+  );
+  const [selectedPlayer, setSelectedPlayer] = useState<string>("");
+
+  const handleCardClick = useCallback(
+    (card: CardType, index: number) => {
+      if (flippedCards[index]) return;
+
+      setFlippedCards((prev) => {
+        const newFlipped = [...prev];
+        newFlipped[index] = true;
+        return newFlipped;
+      });
+
+      setSelectedCard(card);
+      setShowCardModal(true);
+    },
+    [flippedCards]
+  );
+
+  const handleConfirm = useCallback(() => {
+    console.log("Page: handleConfirm called");
+    if (selectedCard?.type === "points") {
+      console.log("Page: Adding points:", selectedCard.value);
+
+      // Use functional update to ensure we're working with latest state
+      setPlayers((prev) => {
+        // Check if we've already updated points for this card
+        if (!selectedCard.isUsed) {
+          const newPlayers = [...prev];
+          newPlayers[currentPlayer].points += selectedCard.value;
+          console.log(
+            "Page: New points for player:",
+            newPlayers[currentPlayer].points
+          );
+
+          // Mark the card as used
+          if (selectedCard) {
+            selectedCard.isUsed = true;
+          }
+
+          return newPlayers;
+        }
+        return prev; // Return unchanged state if card was already used
+      });
+
+      setCurrentPlayer((prev) => (prev + 1) % players.length);
+      setShowCardModal(false);
+    }
+  }, [selectedCard, currentPlayer, players.length]);
+
+  const handlePowerAction = useCallback(
+    (action: PowerAction): PowerActionResult => {
+      const actionKey = `${selectedCard?.id}-${action.type}-${action.action}`;
+      console.log("Attempting action:", actionKey);
+      console.log("Current ref value:", actionProcessedRef.current);
+
+      if (actionProcessedRef.current === actionKey) {
+        console.log("Skipping duplicate action:", actionKey);
+        return {
+          title: "Action Already Taken",
+          message: "This action has already been processed",
+          points: players[currentPlayer].points,
+        };
+      }
+
+      // Set the ref BEFORE processing the action
+      actionProcessedRef.current = actionKey;
+      console.log("Set new ref value:", actionProcessedRef.current);
+
+      switch (action.type) {
+        case "gamble": {
+          const chance = Math.random();
+          const isWin = chance > 0.5;
+          let newPoints = 0;
+
+          console.log("Starting points:", players[currentPlayer].points);
+          console.log("Is win:", isWin);
+
+          setPlayers((current) => {
+            const newPlayers = [...current];
+            const player = newPlayers[currentPlayer];
+            const startingPoints = player.points;
+
+            // If points have already been modified, return current state
+            if (player.points !== 5) {
+              // Or whatever your initial points value is
+              console.log("Points already modified, skipping update");
+              return current;
+            }
+
+            console.log("State update - starting points:", startingPoints);
+
+            if (isWin) {
+              player.points *= 2;
+              console.log("State update - after doubling:", player.points);
+            } else {
+              player.points = Math.floor(player.points / 2);
+              console.log("State update - after halving:", player.points);
+            }
+
+            newPoints = player.points;
+            return newPlayers;
+          });
+
+          // Mark card as used
+          if (selectedCard) {
+            selectedCard.isUsed = true;
+          }
+
+          const result = {
+            title: isWin ? "Lucky! 🎉" : "Unlucky! 😢",
+            message: isWin
+              ? `Your points doubled to ${newPoints}!`
+              : `Your points were halved to ${newPoints}!`,
+            points: newPoints,
+            isSuccess: isWin,
+          };
+
+          setActionResult(result);
+          return result;
+        }
+
+        case "takeGive": {
+          console.log("Starting takeGive action:", {
+            action,
+            currentPlayer: players[currentPlayer].name,
+            currentPoints: players[currentPlayer].points,
+          });
+
+          if (!action.targetPlayer) {
+            console.log("Error: No target player selected");
+            return {
+              title: "Error",
+              message: "No target player selected",
+              points: players[currentPlayer].points,
+            };
+          }
+
+          const targetPlayerIndex = players.findIndex(
+            (p) => p.name === action.targetPlayer
+          );
+
+          const actionKey = `${selectedCard?.id}-${action.type}-${action.action}-${action.targetPlayer}`;
+          console.log("Action key:", actionKey);
+          console.log("Current ref value:", actionProcessedRef.current);
+
+          if (actionProcessedRef.current === actionKey) {
+            console.log("Skipping duplicate action");
+            return {
+              title: "Action Already Taken",
+              message: "This action has already been processed",
+              points: players[currentPlayer].points,
+            };
+          }
+
+          let finalCurrentPoints = players[currentPlayer].points;
+          let finalTargetPoints = players[targetPlayerIndex].points;
+
+          setPlayers((current) => {
+            // Skip if we've already processed this action
+            if (selectedCard?.isUsed) {
+              console.log("Card already used, skipping update");
+              return current;
+            }
+
+            const newPlayers = [...current];
+            const currentPlayerObj = newPlayers[currentPlayer];
+            const targetPlayerObj = newPlayers[targetPlayerIndex];
+
+            console.log("Before points modification:", {
+              currentPlayer: currentPlayerObj.name,
+              currentPoints: currentPlayerObj.points,
+              targetPlayer: targetPlayerObj.name,
+              targetPoints: targetPlayerObj.points,
+            });
+
+            if (action.action === "take") {
+              const pointsToTake = Math.min(7, targetPlayerObj.points);
+              targetPlayerObj.points -= pointsToTake;
+              currentPlayerObj.points += pointsToTake;
+              finalCurrentPoints = currentPlayerObj.points;
+              finalTargetPoints = targetPlayerObj.points;
+
+              console.log("After take action:", {
+                pointsTaken: pointsToTake,
+                newCurrentPoints: currentPlayerObj.points,
+                newTargetPoints: targetPlayerObj.points,
+              });
+            } else if (action.action === "give") {
+              const pointsToGive = Math.min(3, currentPlayerObj.points);
+              currentPlayerObj.points -= pointsToGive;
+              targetPlayerObj.points += pointsToGive;
+              finalCurrentPoints = currentPlayerObj.points;
+              finalTargetPoints = targetPlayerObj.points;
+
+              console.log("After give action:", {
+                pointsGiven: pointsToGive,
+                newCurrentPoints: currentPlayerObj.points,
+                newTargetPoints: targetPlayerObj.points,
+              });
+            }
+
+            // Mark card as used within the same update
+            if (selectedCard) {
+              selectedCard.isUsed = true;
+            }
+
+            return newPlayers;
+          });
+
+          actionProcessedRef.current = actionKey;
+
+          const isTake = action.action === "take";
+          const pointsAmount = isTake ? 7 : 3;
+
+          const result = {
+            title: isTake ? "Points Taken!" : "Points Given!",
+            message: isTake
+              ? `You took ${pointsAmount} points from ${action.targetPlayer}`
+              : `You gave ${pointsAmount} points to ${action.targetPlayer}`,
+            points: finalCurrentPoints,
+            targetPlayer: action.targetPlayer,
+          };
+
+          console.log("Action result:", result);
+          return result;
+        }
+
+        case "swap": {
+          console.log("=== Starting Swap Action ===");
+          console.log("Initial state:", {
+            action,
+            currentPlayer: players[currentPlayer].name,
+            currentPoints: players[currentPlayer].points,
+            selectedCard: selectedCard?.id,
+          });
+
+          if (!action.targetPlayer) {
+            console.log("❌ Error: No target player selected");
+            return {
+              title: "Error",
+              message: "No target player selected",
+              points: players[currentPlayer].points,
+            };
+          }
+
+          const targetPlayerIndex = players.findIndex(
+            (p) => p.name === action.targetPlayer
+          );
+
+          const actionKey = `${selectedCard?.id}-${action.type}-${action.action}-${action.targetPlayer}`;
+          console.log("🔑 Action tracking:", {
+            actionKey,
+            currentRef: actionProcessedRef.current,
+            cardUsed: selectedCard?.isUsed,
+          });
+
+          if (actionProcessedRef.current === actionKey) {
+            console.log("⚠️ Skipping duplicate action");
+            return {
+              title: "Action Already Taken",
+              message: "This action has already been processed",
+              points: players[currentPlayer].points,
+            };
+          }
+
+          let finalCurrentPoints = players[currentPlayer].points;
+          let finalTargetPoints = players[targetPlayerIndex].points;
+
+          setPlayers((current) => {
+            // Skip if we've already processed this action
+            if (selectedCard?.isUsed) {
+              console.log("Card already used, skipping update");
+              return current;
+            }
+
+            const newPlayers = [...current];
+            const currentPlayerObj = newPlayers[currentPlayer];
+            const targetPlayerObj = newPlayers[targetPlayerIndex];
+
+            console.log("Before points swap:", {
+              currentPlayer: currentPlayerObj.name,
+              currentPoints: currentPlayerObj.points,
+              targetPlayer: targetPlayerObj.name,
+              targetPoints: targetPlayerObj.points,
+            });
+
+            // Perform the swap
+            const tempPoints = currentPlayerObj.points;
+            currentPlayerObj.points = targetPlayerObj.points;
+            targetPlayerObj.points = tempPoints;
+
+            finalCurrentPoints = currentPlayerObj.points;
+            finalTargetPoints = targetPlayerObj.points;
+
+            console.log("After points swap:", {
+              currentPlayer: currentPlayerObj.name,
+              currentPoints: currentPlayerObj.points,
+              targetPlayer: targetPlayerObj.name,
+              targetPoints: targetPlayerObj.points,
+            });
+
+            // Mark card as used within the same update
+            if (selectedCard) {
+              selectedCard.isUsed = true;
+            }
+
+            return newPlayers;
+          });
+
+          actionProcessedRef.current = actionKey;
+
+          const result = {
+            title: "Points Swapped!",
+            message: `Swapped ${finalTargetPoints} points with ${action.targetPlayer}'s ${finalCurrentPoints} points!`,
+            points: finalCurrentPoints,
+            targetPlayer: action.targetPlayer,
+          };
+
+          console.log("Action result:", result);
+          return result;
+        }
+
+        default:
+          return {
+            title: "Invalid Action",
+            message: "This power card type is not supported",
+            points: players[currentPlayer].points,
+          };
+      }
+    },
+    [currentPlayer, players, selectedCard]
+  );
+
+  const handleModalClose = useCallback(() => {
+    setShowCardModal(false);
+    setActionResult(null);
+    // Move to next player when modal closes after showing result
+    if (actionResult) {
+      setCurrentPlayer((prev) => (prev + 1) % players.length);
+    }
+  }, [actionResult, players.length]);
+
+  const cardGrid = useMemo(
+    () => (
+      <div className="grid grid-cols-5 gap-4 mb-8">
+        {gameCards.map((card, index) => (
+          <Card
+            key={card.id}
+            isFlipped={flippedCards[index]}
+            onClick={() => handleCardClick(card, index)}
+            type={card.type}
+            value={card.value}
+            powerType={card.powerType}
+            isUsed={flippedCards[index]}
+          />
+        ))}
+      </div>
+    ),
+    [flippedCards, handleCardClick, gameCards]
+  );
+
+  const updateShields = useCallback(() => {
+    setPlayers((currentPlayers) =>
+      currentPlayers.map((player) => ({
+        ...player,
+        shield: Math.max(0, player.shield - 1),
+      }))
+    );
+  }, []);
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    <div className="min-h-screen bg-gradient-to-b from-green-900 to-green-800 text-white flex flex-col items-center justify-center p-4">
+      <Snowfall />
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+      <h1 className="text-4xl font-bold mb-8 text-red-500 filter drop-shadow-lg">
+        Christmas Gift Game
+      </h1>
+
+      <div className="flex justify-center space-x-4 mb-8 z-10">
+        {players.map((player, index) => (
+          <PlayerDashboard
+            key={player.id}
+            player={player}
+            isActive={index === currentPlayer}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        ))}
+      </div>
+
+      <div className="relative z-10">{cardGrid}</div>
+
+      {selectedCard && (
+        <CardModal
+          isOpen={showCardModal}
+          onClose={handleModalClose}
+          cardType={selectedCard.type}
+          cardValue={selectedCard.value}
+          currentPoints={players[currentPlayer].points}
+          onConfirm={handleConfirm}
+          powerType={selectedCard.powerType}
+          players={players
+            .filter((p) => p.id !== players[currentPlayer].id)
+            .map((p) => p.name)}
+          onPowerAction={handlePowerAction}
+          actionResult={actionResult}
+          setActionResult={setActionResult}
+          selectedPlayer={selectedPlayer}
+          setSelectedPlayer={setSelectedPlayer}
+        />
+      )}
     </div>
   );
 }
